@@ -1,6 +1,6 @@
 // Runtime configuration for Vercel
 export const config = {
-  runtime: 'nodejs18.x',
+  runtime: 'nodejs',
 };
 
 // Vercel Serverless Function - Twitch Streams
