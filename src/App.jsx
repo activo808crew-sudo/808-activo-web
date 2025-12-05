@@ -447,7 +447,7 @@ export default function App() {
         id: '1',
         login: 'MissiFussa',
         name: 'MissiFussa',
-        avatar: 'https://static-cdn.jtvnw.net/jtv_user_pictures/c4e7c4c0-0e0a-4f0e-9c0a-0b0a0c0e0a0a-profile_image-300x300.png',
+        avatar: null,
         url: 'https://twitch.tv/MissiFussa',
         status: 'offline',
         description: 'Streamer de la comunidad 808 Activo'
@@ -456,7 +456,7 @@ export default function App() {
         id: '2',
         login: 'Yaqz29',
         name: 'Yaqz29',
-        avatar: 'https://static-cdn.jtvnw.net/jtv_user_pictures/c4e7c4c0-0e0a-4f0e-9c0a-0b0a0c0e0a0a-profile_image-300x300.png',
+        avatar: null,
         url: 'https://twitch.tv/Yaqz29',
         status: 'offline',
         description: 'Streamer de la comunidad 808 Activo'
@@ -465,7 +465,7 @@ export default function App() {
         id: '3',
         login: 'parzival016',
         name: 'Parzival',
-        avatar: 'https://static-cdn.jtvnw.net/jtv_user_pictures/c4e7c4c0-0e0a-4f0e-9c0a-0b0a0c0e0a0a-profile_image-300x300.png',
+        avatar: null,
         url: 'https://twitch.tv/parzival016',
         status: 'offline',
         description: 'Streamer de la comunidad 808 Activo'
@@ -474,7 +474,7 @@ export default function App() {
         id: '4',
         login: 'valesuki___',
         name: 'Valesuki',
-        avatar: 'https://static-cdn.jtvnw.net/jtv_user_pictures/c4e7c4c0-0e0a-4f0e-9c0a-0b0a0c0e0a0a-profile_image-300x300.png',
+        avatar: null,
         url: 'https://twitch.tv/valesuki___',
         status: 'offline',
         description: 'Streamer de la comunidad 808 Activo'
@@ -483,7 +483,7 @@ export default function App() {
         id: '5',
         login: 'ladycherryblack',
         name: 'LadyCherryBlack',
-        avatar: 'https://static-cdn.jtvnw.net/jtv_user_pictures/c4e7c4c0-0e0a-4f0e-9c0a-0b0a0c0e0a0a-profile_image-300x300.png',
+        avatar: null,
         url: 'https://twitch.tv/ladycherryblack',
         status: 'offline',
         description: 'Streamer de la comunidad 808 Activo'
