@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { SpeedInsights } from "@vercel/speed-insights/react"
 import DiscordIcon from "./assets/discord.svg";
 import ShopModal from "./ShopModal";
 import Activo from "./assets/Activo.webp";
@@ -1060,8 +1061,10 @@ export default function App() {
           </p>
         </div>
       </footer>
-      <ShopModal isOpen={isShopOpen} onClose={() => setIsShopOpen(false)} />
-      <AboutModal isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} />
     </div >
+    <SpeedInsights />
+    { isShopOpen && <ShopModal isOpen={isShopOpen} onClose={() => setIsShopOpen(false)} /> }
+  { isAboutOpen && <AboutModal isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} /> }
   );
 }
+```
