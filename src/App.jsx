@@ -1061,10 +1061,9 @@ export default function App() {
           </p>
         </div>
       </footer>
-    </div >
-    <SpeedInsights />
-    { isShopOpen && <ShopModal isOpen={isShopOpen} onClose={() => setIsShopOpen(false)} /> }
-  { isAboutOpen && <AboutModal isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} /> }
+      <SpeedInsights />
+      {isShopOpen && <ShopModal isOpen={isShopOpen} onClose={() => setIsShopOpen(false)} />}
+      {isAboutOpen && <AboutModal isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} />}
+    </div>
   );
 }
-```
