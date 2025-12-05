@@ -489,11 +489,17 @@ export default function App() {
       }
     ];
 
+
+    // Configuración de API URL (usa Vercel en producción, localhost en desarrollo)
+    const API_BASE_URL = import.meta.env.PROD
+      ? 'https://808-activo-web.vercel.app'  // Cambia esto por tu URL de Vercel
+      : '';  // En desarrollo usa rutas relativas (localhost)
+
     async function fetchTwitchData() {
       setLoadingStreams(true);
       try {
         const loginsParam = STREAMER_LOGINS.join(',');
-        const res = await fetch(`/api/streams?logins=${encodeURIComponent(loginsParam)}`);
+        const res = await fetch(`${API_BASE_URL}/api/streams?logins=${encodeURIComponent(loginsParam)}`);
         if (!res.ok) {
           console.warn('Server /api/streams failed:', res.status, '- Using static fallback data');
           // Usar datos estáticos como fallback
