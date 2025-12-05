@@ -441,55 +441,6 @@ export default function App() {
   useEffect(() => {
     let mounted = true;
 
-    // Datos estáticos como fallback cuando la API no está disponible
-    const STATIC_STREAMERS = [
-      {
-        id: '1',
-        login: 'MissiFussa',
-        name: 'MissiFussa',
-        avatar: null,
-        url: 'https://twitch.tv/MissiFussa',
-        status: 'offline',
-        description: 'Streamer de la comunidad 808 Activo'
-      },
-      {
-        id: '2',
-        login: 'Yaqz29',
-        name: 'Yaqz29',
-        avatar: null,
-        url: 'https://twitch.tv/Yaqz29',
-        status: 'offline',
-        description: 'Streamer de la comunidad 808 Activo'
-      },
-      {
-        id: '3',
-        login: 'parzival016',
-        name: 'Parzival',
-        avatar: null,
-        url: 'https://twitch.tv/parzival016',
-        status: 'offline',
-        description: 'Streamer de la comunidad 808 Activo'
-      },
-      {
-        id: '4',
-        login: 'valesuki___',
-        name: 'Valesuki',
-        avatar: null,
-        url: 'https://twitch.tv/valesuki___',
-        status: 'offline',
-        description: 'Streamer de la comunidad 808 Activo'
-      },
-      {
-        id: '5',
-        login: 'ladycherryblack',
-        name: 'LadyCherryBlack',
-        avatar: null,
-        url: 'https://twitch.tv/ladycherryblack',
-        status: 'offline',
-        description: 'Streamer de la comunidad 808 Activo'
-      }
-    ];
-
 
     // Configuración de API URL (usa Vercel en producción, localhost en desarrollo)
     const API_BASE_URL = import.meta.env.PROD
@@ -502,10 +453,9 @@ export default function App() {
         const loginsParam = STREAMER_LOGINS.join(',');
         const res = await fetch(`${API_BASE_URL}/api/streams?logins=${encodeURIComponent(loginsParam)}`);
         if (!res.ok) {
-          console.warn('Server /api/streams failed:', res.status, '- Using static fallback data');
-          // Usar datos estáticos como fallback
+          console.warn('Server /api/streams failed:', res.status);
           if (mounted) {
-            setStreamers(STATIC_STREAMERS);
+            setStreamers([]);
             setCurrentStreamerIndex(0);
           }
           setLoadingStreams(false);
@@ -517,15 +467,13 @@ export default function App() {
           setStreamers(data);
           setCurrentStreamerIndex(0);
         } else if (mounted) {
-          // Si la API responde pero sin datos, usar fallback
-          setStreamers(STATIC_STREAMERS);
+          setStreamers([]);
           setCurrentStreamerIndex(0);
         }
       } catch (err) {
-        console.error('Error fetching Twitch data from /api/streams:', err, '- Using static fallback data');
-        // Usar datos estáticos cuando hay error de red
+        console.error('Error fetching Twitch data from /api/streams:', err);
         if (mounted) {
-          setStreamers(STATIC_STREAMERS);
+          setStreamers([]);
           setCurrentStreamerIndex(0);
         }
       } finally {
