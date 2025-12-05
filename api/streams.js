@@ -1,10 +1,10 @@
-// Vercel Serverless Function para Twitch Streams
-export default async function handler(req, res) {
-  // Habilitar CORS
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
+// Vercel Serverless Function
+module.exports = async (req, res) => {
+  // CORS Headers
+  res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
   if (req.method === 'OPTIONS') {
     res.status(200).end();
@@ -12,119 +12,91 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Obtener credenciales de variables de entorno
     const CLIENT_ID = process.env.TWITCH_CLIENT_ID;
     const CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
 
     if (!CLIENT_ID || !CLIENT_SECRET) {
-      return res.status(500).json({
-        error: 'Missing Twitch credentials in environment variables'
-      });
+      console.error('Missing credentials:', { CLIENT_ID: !!CLIENT_ID, CLIENT_SECRET: !!CLIENT_SECRET });
+      return res.status(500).json({ error: 'Missing Twitch credentials' });
     }
 
-    // Obtener token de acceso
-    let accessToken = process.env.VITE_TWITCH_TOKEN;
+    // Get access token
+    const tokenUrl = 'https://id.twitch.tv/oauth2/token';
+    const tokenRes = await fetch(`${tokenUrl}?client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}&grant_type=client_credentials`, {
+      method: 'POST'
+    });
 
-    if (!accessToken) {
-      const tokenUrl = 'https://id.twitch.tv/oauth2/token';
-      const tokenRes = await fetch(`${tokenUrl}?client_id=${encodeURIComponent(CLIENT_ID)}&client_secret=${encodeURIComponent(CLIENT_SECRET)}&grant_type=client_credentials`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      });
-
-      if (!tokenRes.ok) {
-        const text = await tokenRes.text();
-        console.error('Token request failed:', tokenRes.status, text);
-        return res.status(502).json({ error: 'Failed obtaining Twitch token', status: tokenRes.status });
-      }
-
-      const tokenJson = await tokenRes.json();
-      accessToken = tokenJson?.access_token;
-
-      if (!accessToken) {
-        return res.status(502).json({ error: 'No access_token from Twitch' });
-      }
+    if (!tokenRes.ok) {
+      console.error('Token request failed:', tokenRes.status);
+      return res.status(502).json({ error: 'Failed to get Twitch token' });
     }
 
-    // Parse logins from query
-    const { logins } = req.query || {};
-    let loginArr = [];
+    const tokenData = await tokenRes.json();
+    const accessToken = tokenData.access_token;
 
-    if (logins) {
-      loginArr = String(logins).split(',').map(s => s.trim()).filter(Boolean);
-    }
+    // Parse query
+    const logins = req.query.logins || 'MissiFussa,Yaqz29,parzival016,valesuki___,ladycherryblack';
+    const loginArr = logins.split(',').map(s => s.trim());
 
-    if (loginArr.length === 0) {
-      loginArr = ['MissiFussa', 'Yaqz29', 'parzival016', 'valesuki___', 'ladycherryblack'];
-    }
-
-    // 1) Get users
+    // Get users
     const usersQuery = loginArr.map(login => `login=${encodeURIComponent(login)}`).join('&');
     const usersRes = await fetch(`https://api.twitch.tv/helix/users?${usersQuery}`, {
       headers: {
         'Client-ID': CLIENT_ID,
-        Authorization: `Bearer ${accessToken}`,
-      },
+        'Authorization': `Bearer ${accessToken}`
+      }
     });
 
     if (!usersRes.ok) {
-      const text = await usersRes.text();
-      console.error('Helix users failed:', usersRes.status, text);
-      return res.status(usersRes.status).json({ error: 'Failed fetching users', status: usersRes.status });
+      console.error('Users request failed:', usersRes.status);
+      return res.status(502).json({ error: 'Failed to fetch users' });
     }
 
-    const usersJson = await usersRes.json();
-    const users = Array.isArray(usersJson.data) ? usersJson.data : [];
+    const usersData = await usersRes.json();
+    const users = usersData.data || [];
 
-    // 2) Get live streams
+    // Get streams
     const idsQuery = users.map(u => `user_id=${u.id}`).join('&');
-    let streamsJson = { data: [] };
+    let streamsData = { data: [] };
 
     if (idsQuery) {
       const streamsRes = await fetch(`https://api.twitch.tv/helix/streams?${idsQuery}`, {
         headers: {
           'Client-ID': CLIENT_ID,
-          Authorization: `Bearer ${accessToken}`,
-        },
+          'Authorization': `Bearer ${accessToken}`
+        }
       });
 
       if (streamsRes.ok) {
-        streamsJson = await streamsRes.json();
-      } else {
-        console.warn('Helix streams fetch failed:', streamsRes.status);
+        streamsData = await streamsRes.json();
       }
     }
 
-    // 3) Merge data
+    // Merge data
     const merged = loginArr.map(login => {
-      const u = users.find(x => String(x.login).toLowerCase() === String(login).toLowerCase());
-      if (!u) return { login, name: login, url: `https://twitch.tv/${login}`, status: 'offline' };
+      const user = users.find(u => u.login.toLowerCase() === login.toLowerCase());
+      if (!user) return null;
 
-      const live = streamsJson.data.find(s => String(s.user_id) === String(u.id));
-
-      let thumbnail = null;
-      if (live?.thumbnail_url) {
-        thumbnail = String(live.thumbnail_url).replace('{width}', '640').replace('{height}', '360');
-      }
+      const stream = streamsData.data.find(s => s.user_id === user.id);
 
       return {
-        id: String(u.id),
-        login: u.login,
-        name: u.display_name || u.login,
-        avatar: u.profile_image_url || null,
-        url: `https://twitch.tv/${u.login}`,
-        status: live ? 'live' : 'offline',
-        game: live?.game_name || null,
-        title: live?.title || null,
-        thumbnail,
-        viewers: live?.viewer_count ? Number(live.viewer_count) : 0,
-        description: u.description || null,
+        id: user.id,
+        login: user.login,
+        name: user.display_name,
+        avatar: user.profile_image_url,
+        url: `https://twitch.tv/${user.login}`,
+        status: stream ? 'live' : 'offline',
+        game: stream?.game_name || null,
+        title: stream?.title || null,
+        thumbnail: stream?.thumbnail_url?.replace('{width}', '640').replace('{height}', '360'),
+        viewers: stream?.viewer_count || 0,
+        description: user.description
       };
-    });
+    }).filter(Boolean);
 
     return res.status(200).json({ data: merged });
-  } catch (err) {
-    console.error('Error in /api/streams:', err);
-    return res.status(500).json({ error: 'Internal error', message: err.message });
+  } catch (error) {
+    console.error('API Error:', error);
+    return res.status(500).json({ error: 'Internal server error', message: error.message });
   }
-}
+};
