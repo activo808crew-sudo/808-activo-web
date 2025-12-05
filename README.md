@@ -1,4 +1,4 @@
-# 808 ACTIVO - Comunidad Gaming LATAM
+# 🎮 808 ACTIVO - Comunidad Gaming LATAM
 
 Sitio web oficial de la comunidad gaming 808 ACTIVO con servidor Minecraft, eventos, streamers y más.
 
