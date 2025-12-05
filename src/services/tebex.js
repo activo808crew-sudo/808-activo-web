@@ -104,7 +104,7 @@ export const TebexService = {
         try {
             // This is a common endpoint for Tebex stores, but might vary.
             // If this fails, we might need a backend proxy.
-            const response = await fetch("https://plugin.tebex.io/community/top_donators");
+            const response = await fetch("/api/tebex-top-donor");
             if (!response.ok) return null;
 
             const json = await response.json();
