@@ -59,54 +59,8 @@ export default async function handler(req, res) {
       return res.status(502).json({ error: 'Users failed', status: usersRes.status });
     }
 
-    const usersData = await usersRes.json();
-    const users = usersData.data || [];
-
-    // Fetch streams
-    const idsQuery = users.map(u => `user_id=${u.id}`).join('&');
-    let streams = [];
-
-    if (idsQuery) {
-      const streamsRes = await fetch(`https://api.twitch.tv/helix/streams?${idsQuery}`, {
-        headers: {
-          'Client-ID': CLIENT_ID,
-          'Authorization': `Bearer ${access_token}`
-        }
-      });
-
-      if (streamsRes.ok) {
-        const data = await streamsRes.json();
-        streams = data.data || [];
-      }
-    }
-
-    // Merge
-    const result = logins.map(login => {
-      const user = users.find(u => u.login.toLowerCase() === login.toLowerCase());
-      if (!user) return null;
-
-      const stream = streams.find(s => s.user_id === user.id);
-
-      return {
-        id: user.id,
-        login: user.login,
-        name: user.display_name,
-        avatar: user.profile_image_url,
-        url: `https://twitch.tv/${user.login}`,
-        status: stream ? 'live' : 'offline',
-        game: stream?.game_name || null,
-        title: stream?.title || null,
-        thumbnail: stream?.thumbnail_url?.replace('{width}', '640').replace('{height}', '360'),
-        viewers: stream?.viewer_count || 0,
-        description: user.description
-      };
-    }).filter(Boolean);
-
-    return res.status(200).json({ data: result });
-  } catch (error) {
-    return res.status(500).json({
-      error: 'Server error',
+    error: 'Server error',
       message: error.message
-    });
-  }
+  });
+}
 }
