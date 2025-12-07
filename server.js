@@ -121,8 +121,8 @@ const server = createServer(async (req, res) => {
             const query = Object.fromEntries(urlObj.searchParams);
             const pathname = urlObj.pathname;
 
-            // Map to file: ./api/auth/login -> ./api/auth/login.js
-            const relativePath = '.' + pathname + '.js';
+            // Map to file: /api/auth/login -> ./api/_controllers/auth/login.js
+            const relativePath = '.' + pathname.replace('/api', '/api/_controllers') + '.js';
             const absolutePath = resolve(__dirname, relativePath);
 
             if (existsSync(absolutePath)) {
