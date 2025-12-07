@@ -42,7 +42,7 @@ function apiPlugin() {
           // Construct file path: ./api/auth/login.js
           // Remove leading / and append .js if not present (though our convention is explicit)
           // Actually, mapped path is relative to root.
-          const relativePath = '.' + pathname + '.js';
+          const relativePath = '.' + pathname.replace('/api', '/api/_controllers') + '.js';
           const absolutePath = path.resolve(process.cwd(), relativePath);
 
           if (!fs.existsSync(absolutePath)) {
