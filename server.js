@@ -1,10 +1,10 @@
-// Servidor Node.js nativo con seguridad mejorada
+// Servidor Node.js nativo con seguridad mejorada y soporte API dinámico
+import 'dotenv/config';
 import { createServer } from 'http';
 import { readFile, stat } from 'fs/promises';
+import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join, extname, normalize, resolve } from 'path';
-import streamsHandler from './api/streams.js';
-import tokenHandler from './api/token.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -31,7 +31,7 @@ const mimeTypes = {
 
 // Rate limiting simple (prevenir spam)
 const requestCounts = new Map();
-const RATE_LIMIT = 100; // requests
+const RATE_LIMIT = 300; // Increased for API usage
 const RATE_WINDOW = 60000; // 1 minuto
 
 function checkRateLimit(ip) {
@@ -66,33 +66,41 @@ function setSecurityHeaders(res) {
     res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+    // Allow CORS because frontend might be on different port in dev, or same origin in prod
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
 
-// Validar y sanitizar path (prevenir path traversal)
-function sanitizePath(requestPath) {
-    // Decodificar URL
-    let decoded;
-    try {
-        decoded = decodeURIComponent(requestPath);
-    } catch {
-        return null; // URL mal formada
-    }
+// Helper to parse body
+const parseBody = async (req) => {
+    return new Promise((resolve) => {
+        if (req.method !== 'POST' && req.method !== 'PUT' && req.method !== 'DELETE') {
+            return resolve({});
+        }
 
-    // Normalizar y resolver path
-    const normalized = normalize(decoded).replace(/^(\.\.[\/\\])+/, '');
-    const distPath = resolve(__dirname, 'dist');
-    const fullPath = resolve(distPath, normalized.startsWith('/') ? normalized.substring(1) : normalized);
-
-    // Verificar que el path esté dentro de dist/
-    if (!fullPath.startsWith(distPath)) {
-        return null; // Intento de path traversal
-    }
-
-    return fullPath;
-}
+        let body = '';
+        req.on('data', chunk => body += chunk.toString());
+        req.on('end', () => {
+            try {
+                resolve(body ? JSON.parse(body) : {});
+            } catch (e) {
+                resolve({});
+            }
+        });
+    });
+};
 
 const server = createServer(async (req, res) => {
     const clientIP = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+
+    // Handle OPTIONS for CORS
+    if (req.method === 'OPTIONS') {
+        setSecurityHeaders(res);
+        res.writeHead(200);
+        res.end();
+        return;
+    }
 
     // Rate limiting
     if (!checkRateLimit(clientIP)) {
@@ -107,87 +115,111 @@ const server = createServer(async (req, res) => {
     console.log(`${new Date().toISOString()} - ${clientIP} - ${req.method} ${req.url}`);
 
     try {
-        // Rutas API
-        if (req.url?.startsWith('/api/streams')) {
-            res.setHeader('Content-Type', 'application/json');
-            const url = new URL(req.url, `http://${req.headers.host}`);
-            const query = Object.fromEntries(url.searchParams);
-            const mockReq = { query, url: req.url };
-            const mockRes = {
-                status: (code) => {
-                    res.statusCode = code;
-                    return mockRes;
-                },
-                json: (data) => {
-                    res.end(JSON.stringify(data));
+        // Dynamic API Handling
+        if (req.url?.startsWith('/api/')) {
+            const urlObj = new URL(req.url, `http://${req.headers.host}`);
+            const query = Object.fromEntries(urlObj.searchParams);
+            const pathname = urlObj.pathname;
+
+            // Map to file: ./api/auth/login -> ./api/auth/login.js
+            const relativePath = '.' + pathname + '.js';
+            const absolutePath = resolve(__dirname, relativePath);
+
+            if (existsSync(absolutePath)) {
+                try {
+                    const body = await parseBody(req);
+                    const { default: handler } = await import(relativePath);
+
+                    const mockReq = {
+                        url: req.url,
+                        method: req.method,
+                        query,
+                        body,
+                        headers: req.headers
+                    };
+
+                    const mockRes = {
+                        status: (code) => {
+                            res.statusCode = code;
+                            return mockRes;
+                        },
+                        json: (data) => {
+                            res.setHeader('Content-Type', 'application/json');
+                            res.end(JSON.stringify(data));
+                            return mockRes;
+                        },
+                        setHeader: (key, val) => {
+                            res.setHeader(key, val);
+                            return mockRes;
+                        },
+                        end: (val) => {
+                            res.end(val);
+                            return mockRes;
+                        }
+                    };
+
+                    await handler(mockReq, mockRes);
+                    return;
+
+                } catch (e) {
+                    console.error(`API Error ${pathname}:`, e);
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Internal API Error' }));
+                    return;
                 }
-            };
-            await streamsHandler(mockReq, mockRes);
+            }
+            // If not found, fall through to static file serving logic which will return 404 or index.html
+            // But for /api/ we should probably return 404 JSON to be clear
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'API Endpoint not found' }));
             return;
         }
 
-        if (req.url?.startsWith('/api/token')) {
-            res.setHeader('Content-Type', 'application/json');
-            const mockReq = { query: {}, url: req.url };
-            const mockRes = {
-                status: (code) => {
-                    res.statusCode = code;
-                    return mockRes;
-                },
-                json: (data) => {
-                    res.end(JSON.stringify(data));
-                }
-            };
-            await tokenHandler(mockReq, mockRes);
-            return;
-        }
+        // Static Files Serving
+        // Validar y sanitizar path (prevenir path traversal)
+        let requestPath = req.url === '/' ? '/index.html' : req.url.split('?')[0];
 
-        // Servir archivos estáticos con validación de seguridad
-        const requestPath = req.url === '/' ? '/index.html' : req.url.split('?')[0]; // Remover query params
-        const filePath = sanitizePath(requestPath);
+        // Normalize path
+        const safeSuffix = normalize(requestPath).replace(/^(\.\.[\/\\])+/, '');
+        const distPath = resolve(__dirname, 'dist');
+        const filePath = resolve(distPath, safeSuffix.startsWith('/') ? safeSuffix.substring(1) : safeSuffix);
 
-        if (!filePath) {
-            // Path inválido o intento de path traversal
+        // Security check
+        if (!filePath.startsWith(distPath)) {
             res.writeHead(403, { 'Content-Type': 'text/plain' });
             res.end('Forbidden');
             return;
         }
 
-        // Verificar que el archivo existe y no es un directorio
+        // Check if file exists
         let stats;
         try {
             stats = await stat(filePath);
             if (stats.isDirectory()) {
-                // Si es directorio, intentar servir index.html
-                const indexPath = join(filePath, 'index.html');
-                stats = await stat(indexPath);
-                const content = await readFile(indexPath);
-                res.writeHead(200, { 'Content-Type': 'text/html' });
-                res.end(content);
-                return;
+                throw new Error("Is dir");
             }
         } catch {
-            // Archivo no encontrado, servir index.html para SPA routing
-            const indexPath = resolve(__dirname, 'dist', 'index.html');
+            // Fallback to index.html for SPA
+            const indexPath = resolve(distPath, 'index.html');
             try {
                 const indexContent = await readFile(indexPath);
                 res.writeHead(200, { 'Content-Type': 'text/html' });
                 res.end(indexContent);
             } catch {
-                res.writeHead(404, { 'Content-Type': 'text/plain' });
-                res.end('404 Not Found');
+                res.writeHead(404);
+                res.end('Not Found');
             }
             return;
         }
 
-        // Leer y servir el archivo
+        // Serve file
         const content = await readFile(filePath);
         const ext = extname(filePath).toLowerCase();
         const contentType = mimeTypes[ext] || 'application/octet-stream';
 
-        // Cache headers para assets estáticos
+        // Cache headers
         if (['.js', '.css', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.woff', '.woff2'].includes(ext)) {
-            res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 año
+            res.setHeader('Cache-Control', 'public, max-age=31536000');
         }
 
         res.writeHead(200, { 'Content-Type': contentType });
@@ -203,15 +235,5 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, () => {
     console.log(`✅ Servidor ejecutándose en http://localhost:${PORT}`);
     console.log(`📁 Sirviendo archivos desde: ${join(__dirname, 'dist')}`);
-    console.log(`🔗 Endpoints API: /api/streams, /api/token`);
-    console.log(`🔒 Seguridad activada: Headers, Rate Limiting, Path Validation`);
-});
-
-// Manejo de errores no capturados
-process.on('uncaughtException', (err) => {
-    console.error('Uncaught Exception:', err);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    console.log(`🔗 API Dinámica Habilitada en /api/*`);
 });

@@ -4,6 +4,7 @@ import DiscordIcon from "./assets/discord.svg";
 import ShopModal from "./ShopModal";
 import Activo from "./assets/Activo.webp";
 import { TebexService } from "./services/tebex";
+import EventCard from "./components/EventCard";
 
 // --- ICONOS SVG INLINE (Para evitar errores de importación) ---
 const IconMenu = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12" /><line x1="4" x2="20" y1="6" y2="6" /><line x1="4" x2="20" y1="18" y2="18" /></svg>;
@@ -33,44 +34,7 @@ const DATA_ACTIVITIES = [
   { title: "COMUNIDAD", desc: "Comunidad gamer LATAM activa para encontrar tu squad gaming ideal." },
 ];
 
-const DATA_EVENTS = [
-  {
-    id: 1,
-    title: "Torneo PvP",
-    description: "Compite y gana premios exclusivos en nuestro torneo mensual.",
-    badge: "PRÓXIMAMENTE",
-    badgeColor: "bg-purple-600",
-    image: "https://images.wallpapersden.com/image/download/heist-fortnite_bGdoZWWUmZqaraWkpJRobWllrWdma2U.jpg",
-    gradient: "from-purple-900/50 to-blue-900/50"
-  },
-  {
-    id: 2,
-    title: "Cine en Discord",
-    description: "Noches de películas y series con la comunidad cada viernes.",
-    badge: "VIERNES",
-    badgeColor: "bg-blue-600",
-    image: "https://preview.redd.it/81g4h40e2c471.jpg?width=640&crop=smart&auto=webp&s=e3af4e909fc4a309bbcf8fde58dfac3612ac5051",
-    gradient: "from-blue-900/50 to-purple-900/50"
-  },
-  {
-    id: 3,
-    title: "Giveaways",
-    description: "Sorteos de Nitro, juegos y hardware para miembros activos.",
-    badge: "MENSUAL",
-    badgeColor: "bg-pink-600",
-    image: "https://cdn.shopify.com/s/files/1/0327/9585/2937/files/Discord---Nitro-Monthly-_INT.jpg?w=400&h=500&fit=crop",
-    gradient: "from-pink-900/50 to-purple-900/50"
-  },
-  {
-    id: 4,
-    title: "LAN Party",
-    description: "Conectate a conocer gente nueva y divertirte con amigos.",
-    badge: "SÁBADO",
-    badgeColor: "bg-yellow-600",
-    image: "https://i.imgur.com/YLu2y8G.png",
-    gradient: "from-yellow-900/50 to-orange-900/50"
-  },
-];
+// Static data removed in favor of dynamic API content
 
 // --- COMPONENTES UI ---
 const ButtonDiscord = ({ children, className = "" }) => {
@@ -170,42 +134,7 @@ const getInitials = (nameOrLogin) => {
 };
 
 // Componente reutilizable para tarjetas con parallax por tarjeta (mouse relativo)
-const EventCard = ({ image, badge, badgeClass = 'bg-purple-600', title, desc, xMult = 10, yMult = 6, gradientClass = 'from-purple-900/50 to-blue-900/50' }) => {
-  const ref = useRef(null);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
 
-  const handleMove = (e) => {
-    const el = ref.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const x = (e.clientX - rect.left - rect.width / 2) / rect.width;
-    const y = (e.clientY - rect.top - rect.height / 2) / rect.height;
-    setOffset({ x, y });
-  };
-
-  return (
-    <div
-      ref={ref}
-      onMouseMove={handleMove}
-      onMouseLeave={() => setOffset({ x: 0, y: 0 })}
-      className="relative w-96 bg-[#130b24] rounded-2xl overflow-hidden border border-purple-500/30 shadow-2xl hover:shadow-purple-500/40 transition-all duration-300 hover:-translate-y-2"
-      style={{
-        transform: `translate3d(${offset.x * xMult}px, ${offset.y * yMult}px, 0)`,
-        transition: 'transform 120ms linear',
-      }}
-    >
-      <div className={`aspect-[4/5] bg-gradient-to-br ${gradientClass} relative overflow-hidden group`}>
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent z-10"></div>
-        <img src={image} alt={title} className="w-full h-full object-cover" />
-        <div className="absolute bottom-0 left-0 right-0 p-6 z-20">
-          {badge && <span className={`inline-block text-white text-xs font-bold px-3 py-1 rounded-full mb-2 ${badgeClass}`}>{badge}</span>}
-          <h3 className="text-2xl font-bold text-white mb-2">{title}</h3>
-          <p className="text-gray-300 text-sm">{desc}</p>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const TopDonorBox = () => {
   const [donor, setDonor] = useState(null);
@@ -368,6 +297,10 @@ export default function App() {
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
 
+  // Dynamic Content State
+  const [events, setEvents] = useState([]);
+  const [minecraftEvent, setMinecraftEvent] = useState(null);
+
   // Twitch-related state
   const [streamers, setStreamers] = useState([]); // will be populated from API
   const [loadingStreams, setLoadingStreams] = useState(false);
@@ -379,16 +312,10 @@ export default function App() {
   const [isTransitioning, setIsTransitioning] = useState(true);
   const carouselRef = useRef(null);
 
-  // List of streamer logins we want to monitor
-  const STREAMER_LOGINS = ['MissiFussa', 'Yaqz29', 'parzival016', 'valesuki___', 'ladycherryblack'];
-
   // Helper: get token from env or backend
   const getToken = async () => {
-    // 1) Try Vite env (dev)
     const envToken = (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_TWITCH_TOKEN) ? import.meta.env.VITE_TWITCH_TOKEN : null;
     if (envToken) return envToken;
-
-    // 2) Try backend endpoint (recommended), expects { access_token: "..." }
     try {
       const res = await fetch("/api/token");
       if (res.ok) {
@@ -396,11 +323,8 @@ export default function App() {
         if (json?.access_token) return json.access_token;
       }
     } catch (e) {
-      // ignore - will fallback
       console.warn("No backend token endpoint or it failed:", e);
     }
-
-    // 3) no token available
     return null;
   };
 
@@ -410,7 +334,6 @@ export default function App() {
       try {
         const res = await fetch("https://api.mcsrvstat.us/2/play.808.lat");
         const data = await res.json();
-
         if (data?.online) {
           setServerOnline(true);
           setOnlinePlayers(data.players?.online || 0);
@@ -424,7 +347,6 @@ export default function App() {
         setOnlinePlayers(0);
       }
     }
-
     checkServer();
     const interval = setInterval(checkServer, 30000);
     return () => clearInterval(interval);
@@ -437,26 +359,75 @@ export default function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Fetch Twitch users + streams via server-side endpoint to avoid CORS/401 in browser
+  // Gyroscope support for mobile parallax
+  useEffect(() => {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (!isMobile) return;
+
+    const handleOrientation = (event) => {
+      // DeviceOrientationEvent provides beta (front-back tilt) and gamma (left-right tilt)
+      // beta: -180 to 180 (negative = tilt towards user, positive = tilt away)
+      // gamma: -90 to 90 (negative = tilt left, positive = tilt right)
+
+      const beta = event.beta || 0;  // front-back tilt
+      const gamma = event.gamma || 0; // left-right tilt
+
+      // Normalize to -1 to 1 range for parallax
+      // We'll use a narrower range for more subtle effect
+      const x = Math.max(-1, Math.min(1, gamma / 30)); // ±30 degrees
+      const y = Math.max(-1, Math.min(1, (beta - 45) / 30)); // centered around 45°
+
+      setMousePos({ x, y });
+    };
+
+    // Request permission for iOS 13+
+    const requestPermission = async () => {
+      if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try {
+          const permission = await DeviceOrientationEvent.requestPermission();
+          if (permission === 'granted') {
+            window.addEventListener('deviceorientation', handleOrientation);
+          }
+        } catch (error) {
+          console.warn('DeviceOrientation permission denied:', error);
+        }
+      } else {
+        // Non-iOS devices or older iOS versions
+        window.addEventListener('deviceorientation', handleOrientation);
+      }
+    };
+
+    // Start listening on first user interaction for iOS
+    const startGyroscope = () => {
+      requestPermission();
+      document.removeEventListener('touchstart', startGyroscope);
+    };
+
+    document.addEventListener('touchstart', startGyroscope, { once: true });
+
+    return () => {
+      window.removeEventListener('deviceorientation', handleOrientation);
+      document.removeEventListener('touchstart', startGyroscope);
+    };
+  }, []);
+
+
+  // Fetch Twitch users + streams
   useEffect(() => {
     let mounted = true;
-
-
-    // Configuración de API URL (usa Vercel en producción, localhost en desarrollo)
     const API_BASE_URL = import.meta.env.PROD
-      ? 'https://808-activo-web.vercel.app'  // Cambia esto por tu URL de Vercel
-      : '';  // En desarrollo usa rutas relativas (localhost)
+      ? 'https://808-activo-web.vercel.app'
+      : '';
 
     async function fetchTwitchData() {
       setLoadingStreams(true);
       try {
-        const loginsParam = STREAMER_LOGINS.join(',');
-        const res = await fetch(`${API_BASE_URL}/api/streams?logins=${encodeURIComponent(loginsParam)}`);
+        const res = await fetch(`${API_BASE_URL}/api/streams`);
         if (!res.ok) {
           console.warn('Server /api/streams failed:', res.status);
           if (mounted) {
             setStreamers([]);
-            setCurrentStreamerIndex(0);
           }
           setLoadingStreams(false);
           return;
@@ -465,16 +436,13 @@ export default function App() {
         const data = Array.isArray(json.data) ? json.data : [];
         if (mounted && data.length > 0) {
           setStreamers(data);
-          setCurrentStreamerIndex(0);
         } else if (mounted) {
           setStreamers([]);
-          setCurrentStreamerIndex(0);
         }
       } catch (err) {
         console.error('Error fetching Twitch data from /api/streams:', err);
         if (mounted) {
           setStreamers([]);
-          setCurrentStreamerIndex(0);
         }
       } finally {
         if (mounted) setLoadingStreams(false);
@@ -482,9 +450,37 @@ export default function App() {
     }
 
     fetchTwitchData();
-
     const interval = setInterval(fetchTwitchData, 60000);
     return () => { mounted = false; clearInterval(interval); };
+  }, []);
+
+  // Fetch Events
+  useEffect(() => {
+    async function fetchEventsData() {
+      try {
+        // Fetch main events
+        const resMain = await fetch('/api/events/list?section=main');
+        const dataMain = await resMain.json();
+        if (dataMain.success && dataMain.events.length > 0) {
+          setEvents(dataMain.events);
+        } else {
+          // Fallback or empty - keep state empty or set defaults if desired
+          // If you want defaults to avoid empty carousel:
+          /* setEvents([{ id: 0, title: "Próximamente", description: "Más eventos pronto...", image: "...", gradient: "..." }]) */
+        }
+
+        // Fetch minecraft event
+        const resMc = await fetch('/api/events/list?section=minecraft');
+        const dataMc = await resMc.json();
+        if (dataMc.success && dataMc.events.length > 0) {
+          // Use the first active one or specifically ordered
+          setMinecraftEvent(dataMc.events[0]);
+        }
+      } catch (e) {
+        console.error("Error fetching events:", e);
+      }
+    }
+    fetchEventsData();
   }, []);
 
 
@@ -497,35 +493,58 @@ export default function App() {
 
   // Event carousel navigation
   const nextEvent = () => {
-    setCurrentEventIndex((prev) => (prev + 1) % DATA_EVENTS.length);
+    if (events.length === 0) return;
+    setCurrentEventIndex((prev) => (prev + 1) % events.length);
   };
 
   const prevEvent = () => {
-    setCurrentEventIndex((prev) => (prev - 1 + DATA_EVENTS.length) % DATA_EVENTS.length);
+    if (events.length === 0) return;
+    setCurrentEventIndex((prev) => (prev - 1 + events.length) % events.length);
   };
 
 
 
   const [isHoveringEvents, setIsHoveringEvents] = useState(false);
+  const [isHoveringStreamers, setIsHoveringStreamers] = useState(false);
 
 
 
   // Streamer carousel navigation
-  const itemsPerView = 3;
+  // Responsive items per view for streamer carousel
+  const [itemsPerView, setItemsPerView] = useState(
+    typeof window !== 'undefined' && window.innerWidth < 768 ? 1 : 3
+  );
+
+  // Update itemsPerView on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      const newItemsPerView = window.innerWidth < 768 ? 1 : 3;
+      if (newItemsPerView !== itemsPerView) {
+        setItemsPerView(newItemsPerView);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [itemsPerView]);
+
 
   const extendedStreamers = React.useMemo(() => {
     if (streamers.length === 0) return [];
     const clonesStart = streamers.slice(-itemsPerView);
     const clonesEnd = streamers.slice(0, itemsPerView);
     return [...clonesStart, ...streamers, ...clonesEnd];
-  }, [streamers]);
+  }, [streamers, itemsPerView]);
 
+  // Only set initial index when streamers first load, not on every update
+  const hasInitialized = useRef(false);
   useEffect(() => {
-    if (streamers.length > 0) {
+    if (streamers.length > 0 && !hasInitialized.current) {
       setCurrentStreamerIndex(itemsPerView);
       setIsTransitioning(false);
+      hasInitialized.current = true;
     }
-  }, [streamers]);
+  }, [streamers, itemsPerView]);
 
   const nextStreamer = () => {
     if (streamers.length === 0) return;
@@ -540,14 +559,35 @@ export default function App() {
   };
 
   const handleTransitionEnd = () => {
+    if (streamers.length === 0) return;
+
+    // When we reach the end clones, snap back to the real end position
     if (currentStreamerIndex >= streamers.length + itemsPerView) {
       setIsTransitioning(false);
-      setCurrentStreamerIndex(itemsPerView);
-    } else if (currentStreamerIndex < itemsPerView) {
+      setTimeout(() => {
+        setCurrentStreamerIndex(itemsPerView);
+      }, 0);
+    }
+    // When we reach the start clones, snap back to the real start position
+    else if (currentStreamerIndex < itemsPerView) {
       setIsTransitioning(false);
-      setCurrentStreamerIndex(streamers.length + itemsPerView - 1);
+      setTimeout(() => {
+        setCurrentStreamerIndex(streamers.length + itemsPerView - 1);
+      }, 0);
     }
   };
+
+  // Auto-advance streamers carousel every 5 seconds
+  // Auto-advance streamers - paused when hovering
+  useEffect(() => {
+    if (streamers.length === 0 || isHoveringStreamers) return;
+
+    const interval = setInterval(() => {
+      nextStreamer();
+    }, 5000); // Advance every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [streamers.length, currentStreamerIndex, isHoveringStreamers]);
 
   return (
     <div className="min-h-screen text-gray-200 font-sans selection:bg-purple-500 selection:text-white overflow-x-hidden">
@@ -555,7 +595,7 @@ export default function App() {
 
       {/* HEADER / NAV */}
       <header className="fixed w-full top-0 z-50 bg-[#0a0319]/90 backdrop-blur-md border-b border-white/5">
-        <div className="container mx-auto px-6 py-4 flex justify-between items-center">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           {/* Logo */}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-tr from-white to-white rounded-lg flex items-center justify-center font-bold text-black text-xl font-mono shadow-[0_0_15px_rgba(139,92,246,0.5)]">
@@ -620,7 +660,7 @@ export default function App() {
         {/* HERO SECTION (#home) */}
         <section
           id="home"
-          className="min-h-[80vh] flex flex-col justify-center items-center text-center px-4 relative overflow-hidden"
+          className="min-h-[calc(100vh-80px)] flex flex-col justify-center items-center text-center px-4 relative overflow-hidden"
           onMouseMove={(e) => {
             const rect = e.currentTarget.getBoundingClientRect();
             const x = (e.clientX - rect.left - rect.width / 2) / rect.width;
@@ -655,9 +695,9 @@ export default function App() {
             >
               La comunidad gamer más activa. Discord con eventos semanales, servidor Minecraft 808 Craft, torneos y streamers en vivo.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <ButtonDiscord className="text-lg px-8 py-4">UNIRSE AL DISCORD</ButtonDiscord>
-              <a href="#minecraft" className="px-8 py-4 rounded-lg border border-gray-600 hover:border-white text-gray-300 hover:text-white font-mono font-bold transition-all" aria-label="Ver servidor Minecraft 808 Craft">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center w-full sm:w-auto px-4 sm:px-0">
+              <ButtonDiscord className="text-lg px-8 py-4 w-full sm:w-auto justify-center">UNIRSE AL DISCORD</ButtonDiscord>
+              <a href="#minecraft" className="px-8 py-4 rounded-lg border border-gray-600 hover:border-white text-gray-300 hover:text-white font-mono font-bold transition-all w-full sm:w-auto text-center" aria-label="Ver servidor Minecraft 808 Craft">
                 SERVIDOR MINECRAFT
               </a>
             </div>
@@ -667,7 +707,7 @@ export default function App() {
         {/* EVENTOS SECTION (#eventos) */}
         <section
           id="eventos"
-          className="py-24 bg-gaming-bg relative overflow-hidden"
+          className="py-16 md:py-24 bg-gaming-bg relative overflow-hidden"
           onMouseMove={(e) => {
             const rect = e.currentTarget.getBoundingClientRect();
             const x = (e.clientX - rect.left - rect.width / 2) / rect.width;
@@ -676,7 +716,7 @@ export default function App() {
           }}
           onMouseLeave={() => setMousePos({ x: 0, y: 0 })}
         >
-          <div className="container mx-auto px-4">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8">
             <h2 className="text-3xl font-bold font-mono text-center mb-16">
               <span className="text-purple-500">&lt;</span> EVENTOS <span className="text-purple-500">/&gt;</span>
             </h2>
@@ -687,10 +727,10 @@ export default function App() {
               {/* Left Arrow */}
               <button
                 onClick={prevEvent}
-                className="absolute left-0 md:-left-12 z-30 bg-purple-600/90 hover:bg-purple-500 text-white p-3 rounded-full shadow-lg transition-all hover:scale-110 backdrop-blur-sm"
+                className="absolute left-0 md:left-4 top-1/2 -translate-y-1/2 z-50 bg-purple-600/90 hover:bg-purple-500 text-white p-2 md:p-3 rounded-full shadow-lg transition-all hover:scale-110 backdrop-blur-sm"
                 aria-label="Evento anterior"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="m15 18-6-6 6-6" />
                 </svg>
               </button>
@@ -698,20 +738,20 @@ export default function App() {
               {/* Right Arrow */}
               <button
                 onClick={nextEvent}
-                className="absolute right-0 md:-right-12 z-30 bg-purple-600/90 hover:bg-purple-500 text-white p-3 rounded-full shadow-lg transition-all hover:scale-110 backdrop-blur-sm"
+                className="absolute right-0 md:right-4 top-1/2 -translate-y-1/2 z-50 bg-purple-600/90 hover:bg-purple-500 text-white p-2 md:p-3 rounded-full shadow-lg transition-all hover:scale-110 backdrop-blur-sm"
                 aria-label="Siguiente evento gaming"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="m9 18 6-6-6-6" />
                 </svg>
               </button>
 
-              {DATA_EVENTS.map((evt, idx) => {
+              {events.length > 0 ? events.map((evt, idx) => {
                 // Calculate relative position
-                let offset = (idx - currentEventIndex + DATA_EVENTS.length) % DATA_EVENTS.length;
+                let offset = (idx - currentEventIndex + events.length) % events.length;
                 // Adjust for shortest path (e.g. if length is 4, 3 becomes -1)
-                if (offset > DATA_EVENTS.length / 2) {
-                  offset -= DATA_EVENTS.length;
+                if (offset > events.length / 2) {
+                  offset -= events.length;
                 }
 
                 // Determine styles based on offset
@@ -720,7 +760,7 @@ export default function App() {
 
                 if (offset === 0) {
                   // Center
-                  positionClass = 'opacity-100 scale-100 md:scale-110 z-30';
+                  positionClass = 'opacity-100 scale-105 md:scale-110 z-30';
                   translateClass = 'translate-x-[-50%]';
                 } else if (offset === 1) {
                   // Right
@@ -740,22 +780,25 @@ export default function App() {
                     onMouseLeave={() => setIsHoveringEvents(false)}
                   >
                     <EventCard
-                      image={evt.image}
-                      badge={evt.badge}
-                      badgeClass={evt.badgeColor}
+                      image={evt.image || evt.image_url}
                       title={evt.title}
                       desc={evt.description}
-                      xMult={offset === 0 ? 12 : 5}
-                      yMult={offset === 0 ? 8 : 3}
-                      gradientClass={evt.gradient}
+                      startDate={evt.start_date}
+                      startTime={evt.start_time}
+                      xMult={20}
+                      yMult={20}
                     />
                   </div>
                 );
-              })}
+              }) : (
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-gray-500 font-mono">
+                  Cargando eventos...
+                </div>
+              )}
 
               {/* Navigation Dots */}
               <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-3 z-40">
-                {DATA_EVENTS.map((_, idx) => (
+                {events.map((_, idx) => (
                   <button
                     key={idx}
                     onClick={() => setCurrentEventIndex(idx)}
@@ -783,20 +826,22 @@ export default function App() {
 
 
         {/* STREAMERS SECTION (#streamers) */}
-        <section id="streamers" className="py-24 bg-[#0f0b1e] relative overflow-hidden">
-          <div className="container mx-auto px-4">
+        <section id="streamers" className="py-16 md:py-24 bg-[#0f0b1e] relative overflow-hidden">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8">
             <h2 className="text-3xl font-bold font-mono text-center mb-16">
-              <span className="text-purple-500">&lt;</span> STREAMERS LATAM <span className="text-purple-500">/&gt;</span> <span className="text-xs bg-red-600 text-white px-2 py-1 rounded animate-pulse ml-2">LIVE</span>
+              <span className="text-purple-500">&lt;</span> STREAMERS <span className="text-purple-500">/&gt;</span> <span className="text-xs bg-red-600 text-white px-2 py-1 rounded animate-pulse ml-2">LIVE</span>
             </h2>
 
             {/* loading / hint */}
-            {loadingStreams && (
-              <div className="mb-6 text-sm text-gray-400 font-mono">Actualizando estado de streamers…</div>
-            )}
+
 
             {streamers.length > 0 && (() => {
               return (
-                <div className="relative max-w-7xl mx-auto">
+                <div
+                  className="relative max-w-7xl mx-auto"
+                  onMouseEnter={() => setIsHoveringStreamers(true)}
+                  onMouseLeave={() => setIsHoveringStreamers(false)}
+                >
                   {/* Left Arrow */}
                   <button
                     onClick={prevStreamer}
@@ -820,11 +865,11 @@ export default function App() {
                   </button>
 
                   {/* Carousel Track */}
-                  <div className="overflow-hidden px-12">
+                  <div className="overflow-hidden px-4 md:px-12 py-8">
                     <div
-                      className={`flex gap-6`}
+                      className="flex"
                       style={{
-                        transform: `translateX(-${currentStreamerIndex * (100 / itemsPerView)}%)`,
+                        transform: `translateX(-${(currentStreamerIndex - (itemsPerView > 1 ? 1 : 0)) * (100 / itemsPerView)}%)`,
                         transition: isTransitioning ? 'transform 500ms ease-out' : 'none'
                       }}
                       onTransitionEnd={handleTransitionEnd}
@@ -834,73 +879,119 @@ export default function App() {
                         const avatarUrl = streamer.avatar || `https://decapi.me/twitch/avatar/${encodeURIComponent(streamer.login)}`;
                         const previewUrl = streamer.thumbnail || `https://static-cdn.jtvnw.net/previews-ttv/live_user_${encodeURIComponent(streamer.login)}-640x360.jpg`;
 
+                        // Calculate if this card is center, left, or right
+                        const relativePosition = idx - currentStreamerIndex;
+                        let cardScale = 'scale-75';
+                        let cardOpacity = 'opacity-50';
+                        let cardZIndex = 'z-10';
+                        let cardPointer = 'pointer-events-none';
+
+                        // On desktop (3 cards), scale center card
+                        if (itemsPerView === 3) {
+                          if (relativePosition === 0) {
+                            // Center card
+                            cardScale = 'scale-110';
+                            cardOpacity = 'opacity-100';
+                            cardZIndex = 'z-30';
+                            cardPointer = '';
+                          } else if (Math.abs(relativePosition) === 1) {
+                            // Side cards
+                            cardScale = 'scale-75';
+                            cardOpacity = 'opacity-50';
+                            cardZIndex = 'z-10';
+                            cardPointer = 'pointer-events-none';
+                          } else {
+                            // Hidden cards
+                            cardScale = 'scale-50';
+                            cardOpacity = 'opacity-0';
+                            cardZIndex = 'z-0';
+                            cardPointer = 'pointer-events-none';
+                          }
+                        } else {
+                          // On mobile (1 card), all visible cards are full size
+                          cardScale = 'scale-100';
+                          cardOpacity = 'opacity-100';
+                          cardZIndex = 'z-20';
+                          cardPointer = '';
+                        }
+
                         return (
                           <div
                             key={uniqueKey}
-                            onClick={() => openChannel(streamer.url)}
-                            className="bg-[#130b24] rounded-xl overflow-hidden border border-white/5 hover:border-purple-500/40 transition-all group flex-shrink-0 cursor-pointer"
-                            style={{ width: `calc(${100 / itemsPerView}% - 1rem)` }}
+                            style={{ width: `${100 / itemsPerView}%` }}
+                            className="flex-shrink-0 px-2 md:px-3 transition-opacity duration-300"
                           >
-                            {/* Preview */}
-                            <div className="h-40 bg-gray-800 relative overflow-hidden">
-                              <img
-                                src={previewUrl}
-                                alt={`${streamer.name || streamer.login} preview`}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = avatarUrl; }}
-                              />
+                            <div
+                              onClick={() => openChannel(streamer.url)}
+                              className={`bg-[#130b24] mx-auto rounded-xl overflow-hidden border border-white/5 hover:border-purple-500/40 group cursor-pointer ${cardScale} ${cardOpacity} ${cardZIndex} ${cardPointer}`}
+                              style={{
+                                transition: isTransitioning ? 'all 500ms ease-out' : 'none',
+                                width: '100%',
+                                maxWidth: itemsPerView === 1 ? '400px' : '380px'
+                              }}
+                            >
+                              {/* Preview */}
+                              <div className="relative overflow-hidden bg-gray-800" style={{ aspectRatio: '16/9' }}>
+                                <img
+                                  src={previewUrl}
+                                  alt={`${streamer.name || streamer.login} preview`}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = avatarUrl; }}
+                                />
 
-                              {streamer.status === 'live' && (
-                                <span className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">
-                                  En Vivo
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="p-5">
-                              <div className="flex justify-between items-start mb-2">
-                                <div className="flex items-center gap-3">
-                                  <img
-                                    src={avatarUrl}
-                                    alt={`${streamer.name || streamer.login} avatar`}
-                                    className="w-10 h-10 rounded-full object-cover border border-white/5"
-                                    onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = `https://decapi.me/twitch/avatar/${encodeURIComponent(streamer.login)}`; }}
-                                  />
-                                  <div>
-                                    <h3 className="font-bold text-lg">{String(streamer.name || streamer.login)}</h3>
-                                    <p className="text-xs text-purple-400 font-mono">
-                                      {streamer.status === 'live' ? String(streamer.game || "—") : (
-                                        streamer.lastStreamDate ? (
-                                          `Último stream: ${formatRelativeTime(streamer.lastStreamDate)}`
-                                        ) : '—'
-                                      )}
-                                    </p>
-                                  </div>
-                                </div>
-
-                                {streamer.platform === 'twitch' ? <IconTwitch /> : <IconYoutube />}
+                                {streamer.status === 'live' && (
+                                  <span className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">
+                                    En Vivo
+                                  </span>
+                                )}
                               </div>
 
-                              {streamer.status === "live" ? (
-                                <>
-                                  <p className="text-purple-300 text-sm mt-2 line-clamp-2">{String(streamer.title || "")}</p>
-                                  <p className="text-gray-400 text-xs mt-1">👁 {Number(streamer.viewers || 0)} espectadores</p>
-                                </>
-                              ) : (
-                                streamer.description && (
-                                  <p className="text-gray-400 text-sm mt-2 line-clamp-2">{String(streamer.description)}</p>
-                                )
-                              )}
+                              <div className="p-5">
+                                <div className="flex justify-between items-start mb-2">
+                                  <div className="flex items-center gap-3">
+                                    <img
+                                      src={avatarUrl}
+                                      alt={`${streamer.name || streamer.login} avatar`}
+                                      className="w-10 h-10 rounded-full object-cover border border-white/5"
+                                      onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = `https://decapi.me/twitch/avatar/${encodeURIComponent(streamer.login)}`; }}
+                                    />
+                                    <div>
+                                      <h3 className="font-bold text-lg">{String(streamer.name || streamer.login)}</h3>
+                                      <p className="text-xs text-purple-400 font-mono">
+                                        {streamer.status === 'live' ? String(streamer.game || "—") : (
+                                          streamer.lastStreamDate ? (
+                                            `Último stream: ${formatRelativeTime(streamer.lastStreamDate)}`
+                                          ) : '—'
+                                        )}
+                                      </p>
+                                    </div>
+                                  </div>
 
-                              <div className={`w-full mt-4 py-2 rounded font-mono text-xs font-bold border text-center transition-colors ${streamer.status === 'live'
-                                ? 'bg-purple-600 border-purple-600 text-white group-hover:bg-purple-700'
-                                : 'border-gray-700 text-gray-500'
-                                }`}>
-                                {streamer.status === 'live' ? 'VER AHORA' : 'OFFLINE'}
+                                  {streamer.platform === 'twitch' ? <IconTwitch /> : <IconYoutube />}
+                                </div>
+
+                                {streamer.status === "live" ? (
+                                  <>
+                                    <p className="text-purple-300 text-sm mt-2 line-clamp-2">{String(streamer.title || "")}</p>
+                                    <p className="text-gray-400 text-xs mt-1">👁 {Number(streamer.viewers || 0)} espectadores</p>
+                                  </>
+                                ) : (
+                                  streamer.description && (
+                                    <p className="text-gray-400 text-sm mt-2 line-clamp-2">{String(streamer.description)}</p>
+                                  )
+                                )}
+
+                                <div className={`w-full mt-4 py-2 rounded font-mono text-xs font-bold border text-center transition-colors ${streamer.status === 'live'
+                                  ? 'bg-purple-600 border-purple-600 text-white group-hover:bg-purple-700'
+                                  : 'border-gray-700 text-gray-500'
+                                  }`}>
+                                  {streamer.status === 'live' ? 'VER AHORA' : 'OFFLINE'}
+                                </div>
                               </div>
                             </div>
                           </div>
                         );
+
                       })}
                     </div>
                   </div>
@@ -919,12 +1010,23 @@ export default function App() {
                             setIsTransitioning(true);
                             setCurrentStreamerIndex(index + itemsPerView);
                           }}
-                          className={`w-2 h-2 rounded-full transition-all ${activeIndex === index
-                            ? 'bg-purple-500 w-8'
-                            : 'bg-gray-600 hover:bg-gray-500'
+                          className={`relative h-2 rounded-full transition-all duration-300 overflow-hidden ${activeIndex === index
+                            ? 'w-12 bg-gray-700'
+                            : 'w-2 bg-gray-600 hover:bg-gray-500'
                             }`}
                           aria-label={`Go to streamer ${index + 1}`}
-                        />
+                        >
+                          {activeIndex === index && (
+                            <div
+                              className="absolute top-0 left-0 h-full bg-purple-500"
+                              style={{
+                                animation: 'progress 5s linear forwards',
+                                animationPlayState: isHoveringStreamers ? 'paused' : 'running',
+                              }}
+                              onAnimationEnd={nextStreamer}
+                            />
+                          )}
+                        </button>
                       );
                     })}
                   </div>
@@ -935,10 +1037,10 @@ export default function App() {
         </section>
 
         {/* MINECRAFT SECTION (#minecraft) */}
-        <section id="minecraft" className="py-24 relative overflow-hidden">
+        <section id="minecraft" className="py-16 md:py-24 relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-b from-[#0a0319] via-[#130b2e] to-[#1e1b4b]"></div>
 
-          <div className="container mx-auto px-4 md:pl-8 lg:pl-25 relative z-10">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 md:pl-8 lg:pl-25 relative z-10">
             <div className="flex flex-col lg:flex-row items-center justify-center gap-12 max-w-6xl mx-auto">
               {/* Left column: main server info */}
               <div className="w-full lg:w-1/2 flex flex-col gap-8 text-center lg:text-left">
@@ -979,14 +1081,14 @@ export default function App() {
               {/* Right column: event card */}
               <div className="w-full lg:w-1/2 flex justify-center">
                 <EventCard
-                  image="https://i.imgur.com/syIFmsS.png"
-                  badge="EVENTO"
-                  badgeClass="bg-green-600"
-                  title="WELCOME TO THE NETHER"
-                  desc="Únete para explorar el Nether con todos nosotros."
+                  image={minecraftEvent ? minecraftEvent.image : "https://i.imgur.com/syIFmsS.png"}
+                  badge={minecraftEvent ? minecraftEvent.badge : "EVENTO"}
+                  badgeClass={minecraftEvent ? minecraftEvent.badgeColor : "bg-green-600"}
+                  title={minecraftEvent ? minecraftEvent.title : "WELCOME TO THE NETHER"}
+                  desc={minecraftEvent ? minecraftEvent.description : "Únete para explorar el Nether con todos nosotros."}
                   xMult={10}
                   yMult={6}
-                  gradientClass="from-blue-900/40 to-purple-900/40"
+                  gradientClass={minecraftEvent ? minecraftEvent.gradient : "from-blue-900/40 to-purple-900/40"}
                 />
               </div>
             </div>
@@ -997,12 +1099,12 @@ export default function App() {
 
       {/* FOOTER */}
       <footer className="bg-black border-t border-white/10 py-12 text-center">
-        <div className="container mx-auto px-4">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="font-mono font-bold text-2xl mb-6">808 ACTIVO CREW</div>
           <div className="flex justify-center gap-6 mb-8 text-sm text-gray-400 font-mono">
             <a href="#" className="hover:text-white">Discord</a>
             <a href="#" className="hover:text-white">Reglas</a>
-            <a href="#" className="hover:text-white">Staff</a>
+            <a href="/staff" className="hover:text-white">Staff</a>
           </div>
           <p className="text-gray-600 text-xs font-mono">
             &copy; 2025 808 ACTIVO. Todos los derechos reservados.

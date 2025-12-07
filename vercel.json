@@ -33,6 +33,26 @@
         {
             "source": "/api/token",
             "destination": "/api/token.js"
+        },
+        {
+            "source": "/api/auth/(.*)",
+            "destination": "/api/auth/$1.js"
+        },
+        {
+            "source": "/api/staff-keys/(.*)",
+            "destination": "/api/staff-keys/$1.js"
+        },
+        {
+            "source": "/api/roles/(.*)",
+            "destination": "/api/roles/$1.js"
+        },
+        {
+            "source": "/api/events/(.*)",
+            "destination": "/api/events/$1.js"
+        },
+        {
+            "source": "/(.*)",
+            "destination": "/index.html"
         }
     ]
 }

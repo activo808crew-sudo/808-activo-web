@@ -16,7 +16,11 @@ export default async function handler(req, res) {
 
     try {
         // Fetch from Tebex - this bypasses CORS since it's server-side
-        const tebexRes = await fetch('https://plugin.tebex.io/community/top_donators');
+        const tebexRes = await fetch('https://plugin.tebex.io/community/top_donators', {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+        });
 
         if (!tebexRes.ok) {
             return res.status(tebexRes.status).json({ error: 'Tebex request failed' });

@@ -1,3 +1,5 @@
+import pool from './db.js';
+
 // Runtime configuration for Vercel
 export const config = {
   runtime: 'nodejs',
@@ -16,37 +18,67 @@ export default async function handler(req, res) {
   }
 
   try {
+    // 1. Determine logins (from Query or DB)
+    let logins = [];
+    if (req.query.logins) {
+      logins = req.query.logins.split(',').map(s => s.trim());
+    } else {
+      try {
+        const [rows] = await pool.query('SELECT channel_id FROM streamers WHERE platform = "twitch"');
+        logins = rows.map(r => r.channel_id);
+      } catch (dbErr) {
+        console.error("DB Error fetching streamers:", dbErr);
+        // If DB fails and no query, we can't do anything
+      }
+    }
+
+    console.log('[DEBUG] Streamers to process:', logins.length, logins);
+
+    if (logins.length === 0) {
+      return res.status(200).json({ data: [] });
+    }
+
+    // Default fallback generator
+    const createFallbackData = (loginList) => loginList.map(l => ({
+      id: `fallback-${l}`,
+      login: l,
+      name: l,
+      avatar: null, // Frontend should handle null avatar
+      url: `https://twitch.tv/${l}`,
+      status: 'offline',
+      game: null,
+      title: 'Streamer Configurado',
+      thumbnail: null,
+      viewers: 0,
+      description: 'Detalles no disponibles (API Error/Missing)',
+      lastStreamDate: null
+    }));
+
     const CLIENT_ID = process.env.TWITCH_CLIENT_ID;
     const CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
 
+    // 2. Check Credentials
+    console.log('[DEBUG] Twitch API Check:', { hasClientId: !!CLIENT_ID, hasSecret: !!CLIENT_SECRET });
+
     if (!CLIENT_ID || !CLIENT_SECRET) {
-      return res.status(500).json({
-        error: 'Missing credentials',
-        env: {
-          hasClientId: !!CLIENT_ID,
-          hasSecret: !!CLIENT_SECRET
-        }
-      });
+      console.log('[DEBUG] Missing credentials - Returning fallback data');
+      return res.status(200).json({ data: createFallbackData(logins) });
     }
 
-    // Get token
+    // 3. Get Token
     const tokenRes = await fetch(
       `https://id.twitch.tv/oauth2/token?client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}&grant_type=client_credentials`,
       { method: 'POST' }
     );
 
     if (!tokenRes.ok) {
-      return res.status(502).json({ error: 'Token failed', status: tokenRes.status });
+      console.log('[DEBUG] Token failed:', tokenRes.status, '- Returning fallback data');
+      return res.status(200).json({ data: createFallbackData(logins) });
     }
 
     const { access_token } = await tokenRes.json();
 
-    // Get logins
-    const logins = (req.query.logins || 'MissiFussa,Yaqz29,parzival016,valesuki___,ladycherryblack')
-      .split(',')
-      .map(s => s.trim());
-
-    // Fetch users
+    // 4. Fetch Users
     const usersQuery = logins.map(l => `login=${encodeURIComponent(l)}`).join('&');
     const usersRes = await fetch(`https://api.twitch.tv/helix/users?${usersQuery}`, {
       headers: {
@@ -56,13 +88,14 @@ export default async function handler(req, res) {
     });
 
     if (!usersRes.ok) {
-      return res.status(502).json({ error: 'Users failed', status: usersRes.status });
+      console.log('[DEBUG] Users fetch failed - Returning fallback data');
+      return res.status(200).json({ data: createFallbackData(logins) });
     }
 
     const usersData = await usersRes.json();
     const users = usersData.data || [];
 
-    // Fetch streams
+    // 5. Fetch Streams
     const idsQuery = users.map(u => `user_id=${u.id}`).join('&');
     let streams = [];
 
@@ -80,7 +113,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // Fetch last videos for offline streamers
+    // 6. Fetch Videos (Optional - skipped if error)
     const videos = {};
     for (const user of users) {
       const isLive = streams.find(s => s.user_id === user.id);
@@ -103,25 +136,60 @@ export default async function handler(req, res) {
             }
           }
         } catch (err) {
-          console.error(`Failed to fetch video for ${user.login}:`, err);
+          // Ignore video fetch errors
         }
       }
     }
 
-    // Merge
-    const result = logins.map(login => {
+    // 7. Merge Data & Update DB
+    const result = await Promise.all(logins.map(async login => {
       const user = users.find(u => u.login.toLowerCase() === login.toLowerCase());
-      if (!user) return null;
+      // If user not found in Twitch, return fallback for that specific user
+      if (!user) return createFallbackData([login])[0];
 
       const stream = streams.find(s => s.user_id === user.id);
       const lastVideo = videos[user.id];
 
-      // Determine thumbnail
       let thumbnail = null;
       if (stream?.thumbnail_url) {
         thumbnail = stream.thumbnail_url.replace('{width}', '640').replace('{height}', '360');
       } else if (lastVideo?.thumbnail_url) {
         thumbnail = lastVideo.thumbnail_url.replace('%{width}', '640').replace('%{height}', '360');
+      }
+
+      // Check previous status in DB to trigger notification
+      const isLiveNow = !!stream;
+      try {
+        const [dbRows] = await pool.query('SELECT is_live FROM streamers WHERE channel_id = ?', [login]);
+        if (dbRows.length > 0) {
+          const wasLive = dbRows[0].is_live;
+          // If JUST went live (Offline -> Live)
+          if (isLiveNow && !wasLive) {
+            console.log(`[Streamer] ${login} just went ONLINE! Sending notification...`);
+            // Dynamic import to avoid top-level await issues if any, though standard import works 
+            const { sendDiscordWebhook } = await import('./utils/discord.js');
+            await sendDiscordWebhook(process.env.DISCORD_WEBHOOK_STREAMERS, {
+              content: `<@&1310103738012074055> **${user.display_name}** está en directo! 🔴\nhttps://twitch.tv/${user.login}`,
+              embeds: [{
+                title: stream.title || 'Live Stream',
+                description: `Jugando **${stream.game_name || 'Varios'}**`,
+                url: `https://twitch.tv/${user.login}`,
+                color: 0x9146FF,
+                image: { url: thumbnail + `?t=${Date.now()}` },
+                thumbnail: { url: user.profile_image_url },
+                footer: { text: '808 Activo • Streamers' },
+                timestamp: new Date().toISOString()
+              }]
+            });
+            // Update DB
+            await pool.query('UPDATE streamers SET is_live = TRUE, last_live_at = NOW() WHERE channel_id = ?', [login]);
+          } else if (!isLiveNow && wasLive) {
+            // Went Offline
+            await pool.query('UPDATE streamers SET is_live = FALSE WHERE channel_id = ?', [login]);
+          }
+        }
+      } catch (err) {
+        console.error(`[Streamer] Error updating status for ${login}:`, err);
       }
 
       return {
@@ -138,10 +206,16 @@ export default async function handler(req, res) {
         description: user.description,
         lastStreamDate: lastVideo?.created_at || null
       };
-    }).filter(Boolean);
+    }));
 
     return res.status(200).json({ data: result });
   } catch (error) {
+    console.error('API Streams Error:', error);
+    // Even in total failure, try to return something if we have logins
+    /* 
+       Problem: if we are in catch block, 'logins' might be defined or undefined depending on where it failed.
+       Safe to just return 500 here since we tried our best with fallbacks above.
+    */
     return res.status(500).json({
       error: 'Server error',
       message: error.message
