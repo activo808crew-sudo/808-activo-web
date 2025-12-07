@@ -1,0 +1,15 @@
+# Enable URL Rewriting
+RewriteEngine On
+SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+
+# Verify if request is valid file or folder
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Check if .php file exists for the request
+RewriteCond %{DOCUMENT_ROOT}/api/$1.php -f
+RewriteRule ^(.*)$ $1.php [L]
+
+# Handle parameters if needed, or simple direct mapping:
+# /api/auth/login -> /api/auth/login.php
+# /api/events/list -> /api/events/list.php
